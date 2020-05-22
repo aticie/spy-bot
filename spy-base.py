@@ -2,6 +2,7 @@ import os
 import sqlite3
 import pickle
 import asyncio
+from random import SystemRandom
 
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -36,7 +37,7 @@ service = build('sheets', 'v4', credentials=creds)
 sheet = service.spreadsheets()
 
 
-@tasks.loop(hours=1)
+@tasks.loop(minutes=5)
 async def post_results():
     await bot.wait_until_ready()
     print("Starting post results")
@@ -65,7 +66,7 @@ async def post_results():
 
     data = [
         {
-            'range': f"OpponentScores-QF!F2:M22",
+            'range': f"OpponentScores-QF!F2:M21",
             'values': all_scores
         },
         # Additional ranges to update ...
@@ -81,7 +82,7 @@ async def post_results():
         spreadsheetId=SPREADSHEET_ID, body=body).execute()
 
 
-@tasks.loop(minutes=30)
+@tasks.loop(minutes=15)
 async def spy_user():
     await bot.wait_until_ready()
 
@@ -97,7 +98,8 @@ async def spy_user():
     for username in opponent_players:
 
         scores = await request_scores(username)
-        await asyncio.sleep(2)
+        sleep_for = SystemRandom().random() * 3 + 2  # Sleep between 2-5 seconds
+        await asyncio.sleep(sleep_for)
 
         print(f"Checking scores for {username}, played {len(scores)} scores recently.")
         for score in scores:
