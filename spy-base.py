@@ -36,7 +36,7 @@ service = build('sheets', 'v4', credentials=creds)
 sheet = service.spreadsheets()
 
 
-@tasks.loop(hours=4)
+@tasks.loop(hours=1)
 async def post_results():
     await bot.wait_until_ready()
     print("Starting post results")
@@ -81,7 +81,7 @@ async def post_results():
         spreadsheetId=SPREADSHEET_ID, body=body).execute()
 
 
-@tasks.loop(hours=1)
+@tasks.loop(minutes=30)
 async def spy_user():
     await bot.wait_until_ready()
 
