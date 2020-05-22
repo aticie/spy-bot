@@ -81,6 +81,23 @@ async def post_results():
     service.spreadsheets().values().batchUpdate(
         spreadsheetId=SPREADSHEET_ID, body=body).execute()
 
+    # Dump to another sheet
+    dumped_scores = c.execute("SELECT * FROM scores").fetchall()
+    dumped_scores_reshape = [[uname, bmap_id, sc, date] for _, uname, bmap_id, sc, date in dumped_scores]
+    data = [
+        {
+            'range': f"OpponentScores-QF-Dump!A2:D{len(dumped_scores)+2}",
+            'values': dumped_scores_reshape
+        },
+        # Additional ranges to update ...
+    ]
+    body = {
+        'valueInputOption': 2,
+        'data': data
+    }
+    service.spreadsheets().values().batchUpdate(
+        spreadsheetId=SPREADSHEET_ID, body=body).execute()
+
 
 @tasks.loop(minutes=15)
 async def spy_user():
