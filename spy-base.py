@@ -80,6 +80,7 @@ async def post_results():
     service.spreadsheets().values().batchUpdate(
         spreadsheetId=SPREADSHEET_ID, body=body).execute()
 
+
 @tasks.loop(hours=1)
 async def spy_user():
     await bot.wait_until_ready()
@@ -98,13 +99,20 @@ async def spy_user():
         scores = await request_scores(username)
         await asyncio.sleep(2)
 
-        print(f"Checking scores for {username}")
+        print(f"Checking scores for {username}, played {len(scores)} scores recently.")
         for score in scores:
             mods = int(score["enabled_mods"])
             sv2_enabled = mods & 536870912 == 536870912
 
+            if score["beatmap_id"] in beatmaps:
+                score_mode_text = "sv2" if sv2_enabled else "sv1"
+                fail_text = "(Failed)" if score["rank"] == "F" else ""
+                print(
+                    f"{username} played {score['beatmap_id']} -"
+                    f" It was {score_mode_text} and he made {score['score']}.{fail_text}")
+
             if score["beatmap_id"] in beatmaps and not score["rank"] == "F" and sv2_enabled:
-                print(f"Adding score of {username} to DB.")
+                print(f"Adding score of {username} to DB. - Beatmap {score['beatmap_id']}")
                 add_to_db_if_not_exists(c, score, username)
 
         conn.commit()
@@ -144,5 +152,6 @@ bot = commands.Bot(command_prefix="?", case_insensitive=True, description="Just 
 async def on_ready():
     spy_user.start()
     post_results.start()
+
 
 bot.run(os.environ["DISCORD_TOKEN"], bot=True, reconnect=True)
