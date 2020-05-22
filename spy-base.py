@@ -1,4 +1,5 @@
 import os
+import time
 import sqlite3
 import pickle
 import asyncio
@@ -75,7 +76,8 @@ async def post_results():
         'valueInputOption': 2,
         'data': data
     }
-    print("Sending the following to spreadsheet!")
+    now = time.strftime("%H:%M:%S")
+    print(f"{now} - Sending the following to spreadsheet!")
     for sc in all_scores:
         print(sc)
     service.spreadsheets().values().batchUpdate(
@@ -118,7 +120,8 @@ async def spy_user():
         sleep_for = SystemRandom().random() * 3 + 2  # Sleep between 2-5 seconds
         await asyncio.sleep(sleep_for)
 
-        print(f"Checking scores for {username}, played {len(scores)} scores recently.")
+        now = time.strftime("%H:%M:%S")
+        print(f"{now} - Checking scores for {username}, played {len(scores)} scores recently.")
         for score in scores:
             mods = int(score["enabled_mods"])
             sv2_enabled = mods & 536870912 == 536870912
@@ -131,7 +134,8 @@ async def spy_user():
                     f" It was {score_mode_text} and he made {score['score']}.{fail_text}")
 
             if score["beatmap_id"] in beatmaps and not score["rank"] == "F" and sv2_enabled:
-                print(f"Adding score of {username} to DB. - Beatmap {score['beatmap_id']}")
+                now = time.strftime("%H:%M:%S")
+                print(f"{now} - Adding score of {username} to DB. - Beatmap {score['beatmap_id']}")
                 add_to_db_if_not_exists(c, score, username)
 
         conn.commit()
