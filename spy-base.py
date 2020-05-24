@@ -46,6 +46,9 @@ async def post_results():
     conn = sqlite3.connect("spy.db")
     c = conn.cursor()
 
+    with open("our_players.txt", "r") as f:
+        our_players = f.read().splitlines()
+
     with open("players.txt", "r") as f:
         opponent_players = f.read().splitlines()
 
@@ -53,52 +56,71 @@ async def post_results():
         beatmaps = f.read().splitlines()
 
     all_scores = []
+    our_all_scores = []
     for bmap in beatmaps:
         bmap_scores = []
+        bmap_our_scores = []
         bmap_id = int(bmap)
-        for username in opponent_players:
+        for our_username, username in zip(our_players, opponent_players):
             scores = c.execute("SELECT * FROM scores WHERE username=? AND bmap_id=?", [username, bmap_id]).fetchall()
+            our_scores = c.execute("SELECT * FROM scores WHERE username=? AND bmap_id=?", [username, bmap_id]).fetchall()
             if len(scores) == 0:
                 avg_score = None
             else:
                 avg_score = f"{int(sum(sc for _, _, _, sc, _ in scores) / len(scores))}"
+
+            if len(our_scores) == 0:
+                our_avg = None
+            else:
+                our_avg = f"{int(sum(sc for _, _, _, sc, _ in our_scores) / len(our_scores))}"
             bmap_scores.append(avg_score)
+            bmap_our_scores.append(our_avg)
         all_scores.append(bmap_scores)
+        our_all_scores.append(bmap_our_scores)
 
-    data = [
-        {
-            'range': f"OpponentScores-QF!F2:M21",
-            'values': all_scores
-        },
-        # Additional ranges to update ...
-    ]
-    body = {
-        'valueInputOption': 2,
-        'data': data
-    }
-    now = time.strftime("%H:%M:%S")
-    print(f"{now} - Sending the following to spreadsheet!")
-    for sc in all_scores:
-        print(sc)
-    service.spreadsheets().values().batchUpdate(
-        spreadsheetId=SPREADSHEET_ID, body=body).execute()
 
+    post_to_sheet("OpponentScores-SF", all_scores, False)
+    post_to_sheet("TeamScores-SF", our_all_scores, False)
     # Dump to another sheet
     dumped_scores = c.execute("SELECT * FROM scores").fetchall()
-    dumped_scores_reshape = [[uname, bmap_id, sc, date] for _, uname, bmap_id, sc, date in dumped_scores]
-    data = [
-        {
-            'range': f"OpponentScores-QF-Dump!A2:D{len(dumped_scores)+2}",
-            'values': dumped_scores_reshape
-        },
-        # Additional ranges to update ...
-    ]
-    body = {
-        'valueInputOption': 2,
-        'data': data
-    }
-    service.spreadsheets().values().batchUpdate(
-        spreadsheetId=SPREADSHEET_ID, body=body).execute()
+    post_to_sheet("OpponentScores-Dump", dumped_scores, True)
+
+
+def post_to_sheet(sheet_name, values, dump_or_not):
+    if dump_or_not:
+        data = [
+            {
+                'range': f"{sheet_name}!F2:M21",
+                'values': values
+            },
+            # Additional ranges to update ...
+        ]
+        body = {
+            'valueInputOption': 2,
+            'data': data
+        }
+        now = time.strftime("%H:%M:%S")
+        print(f"{now} - Sending the following to spreadsheet!")
+        for sc in values:
+            print(sc)
+        service.spreadsheets().values().batchUpdate(
+            spreadsheetId=SPREADSHEET_ID, body=body).execute()
+    else:
+        values_reshape = [[uname, bmap_id, sc, date] for _, uname, bmap_id, sc, date in values]
+        data = [
+            {
+                'range': f"OpponentScores-Dump!A2:D{len(values) + 2}",
+                'values': values_reshape
+            },
+            # Additional ranges to update ...
+        ]
+        body = {
+            'valueInputOption': 2,
+            'data': data
+        }
+        service.spreadsheets().values().batchUpdate(
+            spreadsheetId=SPREADSHEET_ID, body=body).execute()
+    return
 
 
 @tasks.loop(minutes=15)
@@ -108,13 +130,16 @@ async def spy_user():
     conn = sqlite3.connect("spy.db")
     c = conn.cursor()
 
+    with open("our_players.txt", "r") as f:
+        our_players = f.read().splitlines()
+
     with open("players.txt", "r") as f:
         opponent_players = f.read().splitlines()
 
     with open("beatmaps.txt", "r") as f:
         beatmaps = f.read().splitlines()
 
-    for username in opponent_players:
+    for our_username, username in zip(our_players, opponent_players):
 
         scores = await request_scores(username)
         sleep_for = SystemRandom().random() * 3 + 2  # Sleep between 2-5 seconds
@@ -122,23 +147,35 @@ async def spy_user():
 
         now = time.strftime("%H:%M:%S")
         print(f"{now} - Checking scores for {username}, played {len(scores)} scores recently.")
-        for score in scores:
-            mods = int(score["enabled_mods"])
-            sv2_enabled = mods & 536870912 == 536870912
+        add_scores_to_db(scores, beatmaps, username, c)
 
-            if score["beatmap_id"] in beatmaps:
-                score_mode_text = "sv2" if sv2_enabled else "sv1"
-                fail_text = "(Failed)" if score["rank"] == "F" else ""
-                print(
-                    f"{username} played {score['beatmap_id']} -"
-                    f" It was {score_mode_text} and he made {score['score']}.{fail_text}")
+        our_scores = await request_scores(our_username)
+        sleep_for = SystemRandom().random() * 3 + 2  # Sleep between 2-5 seconds
+        await asyncio.sleep(sleep_for)
 
-            if score["beatmap_id"] in beatmaps and not score["rank"] == "F" and sv2_enabled:
-                now = time.strftime("%H:%M:%S")
-                print(f"{now} - Adding score of {username} to DB. - Beatmap {score['beatmap_id']}")
-                add_to_db_if_not_exists(c, score, username)
+        now = time.strftime("%H:%M:%S")
+        print(f"{now} - Checking scores for {our_username}, played {len(scores)} scores recently.")
+        add_scores_to_db(our_scores, beatmaps, our_username, c)
 
         conn.commit()
+
+
+def add_scores_to_db(scores, beatmaps, username, cursor):
+    for score in scores:
+        mods = int(score["enabled_mods"])
+        sv2_enabled = mods & 536870912 == 536870912
+
+        if score["beatmap_id"] in beatmaps:
+            score_mode_text = "sv2" if sv2_enabled else "sv1"
+            fail_text = "(Failed)" if score["rank"] == "F" else ""
+            print(
+                f"{username} played {score['beatmap_id']} -"
+                f" It was {score_mode_text} and he made {score['score']}.{fail_text}")
+
+        if score["beatmap_id"] in beatmaps and not score["rank"] == "F" and sv2_enabled:
+            now = time.strftime("%H:%M:%S")
+            print(f"{now} - Adding score of {username} to DB. - Beatmap {score['beatmap_id']}")
+            add_to_db_if_not_exists(cursor, score, username)
 
 
 def add_to_db_if_not_exists(cursor, score, username):
