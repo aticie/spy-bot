@@ -78,16 +78,16 @@ async def post_results():
         all_scores.append(bmap_scores)
         our_all_scores.append(bmap_our_scores)
 
-
     post_to_sheet("OpponentScores-SF", all_scores, False)
     post_to_sheet("TeamScores-SF", our_all_scores, False)
     # Dump to another sheet
     dumped_scores = c.execute("SELECT * FROM scores").fetchall()
     post_to_sheet("OpponentScores-Dump", dumped_scores, True)
+    return
 
 
 def post_to_sheet(sheet_name, values, dump_or_not):
-    if dump_or_not:
+    if not dump_or_not:
         data = [
             {
                 'range': f"{sheet_name}!F2:M21",
