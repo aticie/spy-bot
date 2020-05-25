@@ -63,7 +63,8 @@ async def post_results():
         bmap_id = int(bmap)
         for our_username, username in zip(our_players, opponent_players):
             scores = c.execute("SELECT * FROM scores WHERE username=? AND bmap_id=?", [username, bmap_id]).fetchall()
-            our_scores = c.execute("SELECT * FROM scores WHERE username=? AND bmap_id=?", [username, bmap_id]).fetchall()
+            our_scores = c.execute("SELECT * FROM scores WHERE username=? AND bmap_id=?",
+                                   [our_username, bmap_id]).fetchall()
             if len(scores) == 0:
                 avg_score = None
             else:
@@ -140,7 +141,6 @@ async def spy_user():
         beatmaps = f.read().splitlines()
 
     for our_username, username in zip(our_players, opponent_players):
-
         scores = await request_scores(username)
         sleep_for = SystemRandom().random() * 3 + 2  # Sleep between 2-5 seconds
         await asyncio.sleep(sleep_for)
