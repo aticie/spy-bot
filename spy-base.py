@@ -209,7 +209,7 @@ async def make_score_embed(user_id, username, bmap_id, player_score, date):
               }
     async with aiohttp.ClientSession() as s:
         async with s.get(api_url, params=params) as r:
-            response = await r.json()
+            response = await r.json()[0]
 
     beatmapset_id = response['beatmapset_id']
     bmap_title = response['title']
