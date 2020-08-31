@@ -11,6 +11,9 @@ from google.auth.transport.requests import Request
 
 import aiohttp
 from discord.ext import tasks, commands
+import discord
+
+bot = commands.Bot(command_prefix="?", case_insensitive=True, description="Just an ordinary bot, nothing to see here")
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 SPREADSHEET_ID = os.environ["SPREADSHEET_ID"]
@@ -36,6 +39,28 @@ if not creds or not creds.valid:
 
 service = build('sheets', 'v4', credentials=creds)
 sheet = service.spreadsheets()
+
+
+def get_score_channel():
+    with open('score_channel.txt', 'r') as f:
+        channel_id = int(f.read())
+
+    SCORE_POST_CHANNEL = bot.get_channel(channel_id)
+    return SCORE_POST_CHANNEL
+
+
+SCORE_POST_CHANNEL = get_score_channel()
+
+
+@bot.command(name="set_score_channel")
+@commands.has_permissions(administrator=True)
+async def set_score_channel(ctx, channel_id: int):
+    global SCORE_POST_CHANNEL
+
+    with open('score_channel.txt', 'w') as f:
+        f.write(channel_id)
+
+    SCORE_POST_CHANNEL = bot.get_channel(channel_id)
 
 
 async def post_results():
@@ -96,9 +121,7 @@ def post_to_sheet(sheet_name, values, dump_or_not):
             'data': data
         }
         now = time.strftime("%H:%M:%S")
-        print(f"{now} - Sending the following to spreadsheet!")
-        for sc in values:
-            print(sc)
+        print(f"{now} - Sending scores to spreadsheet!")
         service.spreadsheets().values().batchUpdate(
             spreadsheetId=SPREADSHEET_ID, body=body).execute()
     else:
@@ -173,8 +196,30 @@ def add_to_db_if_not_exists(cursor, score, username):
                               [user_id, bmap_id, player_score, date]).fetchone()
     if db_score is None:
         cursor.execute("INSERT INTO scores VALUES (?,?,?,?,?)", [user_id, username, bmap_id, player_score, date])
+        score_embed = make_score_embed(*[user_id, username, bmap_id, player_score, date])
+        await SCORE_POST_CHANNEL.send(score_embed)
 
     return
+
+
+async def make_score_embed(user_id, username, bmap_id, player_score, date):
+    bmap_url = f'https://osu.ppy.sh/b/{bmap_id}'
+    api_url = f"https://osu.ppy.sh/api/get_beatmaps"
+    params = {"k": os.environ["OSU_API_KEY"],
+              "b": bmap_id
+              }
+    async with aiohttp.ClientSession() as s:
+        async with s.get(api_url, params=params) as r:
+            response = await r.json()
+
+    beatmapset_id = response['beatmapset_id']
+    bmap_title = response['title']
+    cover_url = f"https://assets.ppy.sh/beatmaps/{beatmapset_id}/covers/cover.jpg"
+    desc_text = f'{username} got {player_score} on {bmap_title}!'
+    embed = discord.Embed(description=desc_text)
+    embed.set_author(name=f"New score from {username}", url=f"https://osu.ppy.sh/users/{user_id}",
+                     icon_url=f"http://s.ppy.sh/a/{user_id}")
+    embed.set_image(url=cover_url)
 
 
 async def request_scores(username):
@@ -189,9 +234,6 @@ async def request_scores(username):
             response = await r.json()
 
     return response
-
-
-bot = commands.Bot(command_prefix="?", case_insensitive=True, description="Just an ordinary bot, nothing to see here")
 
 
 @bot.event
