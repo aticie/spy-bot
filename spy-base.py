@@ -70,7 +70,7 @@ async def post_results():
             top4_scores = []
             for i in range(5):
                 try:
-                    top4_scores.append(scores[i])
+                    top4_scores.append(scores_array[i])
                 except IndexError:
                     top4_scores.append(None)
 
@@ -175,7 +175,7 @@ async def add_to_db_if_not_exists(cursor, score, username):
     if db_score is None:
         cursor.execute("INSERT INTO scores VALUES (?,?,?,?,?)", [user_id, username, bmap_id, player_score, date])
         score_embed = await make_score_embed(*[user_id, username, bmap_id, player_score, date])
-        score_channel = bot.get_channel(749956966373261362)
+        score_channel = bot.get_channel(676411865592758272)  # 749956966373261362
         await score_channel.send(embed=score_embed)
 
     return
@@ -193,12 +193,12 @@ async def make_score_embed(user_id, username, bmap_id, player_score, date):
     bmap_info = bmap_info[0]
     beatmapset_id = bmap_info['beatmapset_id']
     bmap_title = bmap_info['title']
-    cover_url = f"https://assets.ppy.sh/beatmaps/{beatmapset_id}/covers/cover.jpg"
-    desc_text = f'{username} got {player_score} on {bmap_title}!'
-    embed = discord.Embed(description=desc_text)
-    embed.set_author(name=f"New score from {username}", url=f"https://osu.ppy.sh/users/{user_id}",
+    thumb_url = f'https://b.ppy.sh/thumb/{beatmapset_id}l.jpg'
+    title_text = f'{username} just scored: **{player_score}**!'
+    embed = discord.Embed(title=title_text)
+    embed.set_author(name=f"New score from {username} on {bmap_title}!", url=f"https://osu.ppy.sh/users/{user_id}",
                      icon_url=f"http://s.ppy.sh/a/{user_id}")
-    embed.set_image(url=cover_url)
+    embed.set_thumbnail(url=thumb_url)
     embed.set_footer(text=f'Score date: {date}')
     return embed
 
