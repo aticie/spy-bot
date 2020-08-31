@@ -76,6 +76,7 @@ async def post_results():
 
             bmap_scores[-1].extend(top4_scores)
 
+        bmap_scores.append(none_fill)
         all_scores.extend(bmap_scores)
 
     post_to_sheet("Qualifier", all_scores, False)
