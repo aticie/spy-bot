@@ -162,14 +162,14 @@ async def spy_user():
 
         now = time.strftime("%H:%M:%S")
         print(f"{now} - Checking scores for {username}, played {len(scores)} scores recently.")
-        add_scores_to_db(scores, beatmaps, username, c)
+        await add_scores_to_db(scores, beatmaps, username, c)
 
         conn.commit()
 
     await post_results()
 
 
-def add_scores_to_db(scores, beatmaps, username, cursor):
+async def add_scores_to_db(scores, beatmaps, username, cursor):
     for score in scores:
         mods = int(score["enabled_mods"])
         sv2_enabled = mods & 536870912 == 536870912
@@ -184,10 +184,10 @@ def add_scores_to_db(scores, beatmaps, username, cursor):
         if score["beatmap_id"] in beatmaps and not score["rank"] == "F" and sv2_enabled:
             now = time.strftime("%H:%M:%S")
             print(f"{now} - Adding score of {username} to DB. - Beatmap {score['beatmap_id']}")
-            add_to_db_if_not_exists(cursor, score, username)
+            await add_to_db_if_not_exists(cursor, score, username)
 
 
-def add_to_db_if_not_exists(cursor, score, username):
+async def add_to_db_if_not_exists(cursor, score, username):
     bmap_id = int(score["beatmap_id"])
     date = score["date"]
     player_score = int(score["score"])
@@ -196,14 +196,13 @@ def add_to_db_if_not_exists(cursor, score, username):
                               [user_id, bmap_id, player_score, date]).fetchone()
     if db_score is None:
         cursor.execute("INSERT INTO scores VALUES (?,?,?,?,?)", [user_id, username, bmap_id, player_score, date])
-        score_embed = make_score_embed(*[user_id, username, bmap_id, player_score, date])
+        score_embed = await make_score_embed(*[user_id, username, bmap_id, player_score, date])
         await SCORE_POST_CHANNEL.send(score_embed)
 
     return
 
 
 async def make_score_embed(user_id, username, bmap_id, player_score, date):
-    bmap_url = f'https://osu.ppy.sh/b/{bmap_id}'
     api_url = f"https://osu.ppy.sh/api/get_beatmaps"
     params = {"k": os.environ["OSU_API_KEY"],
               "b": bmap_id
@@ -220,6 +219,8 @@ async def make_score_embed(user_id, username, bmap_id, player_score, date):
     embed.set_author(name=f"New score from {username}", url=f"https://osu.ppy.sh/users/{user_id}",
                      icon_url=f"http://s.ppy.sh/a/{user_id}")
     embed.set_image(url=cover_url)
+    embed.set_footer(text=f'Score date: {date}')
+    return embed
 
 
 async def request_scores(username):
