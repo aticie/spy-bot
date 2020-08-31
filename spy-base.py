@@ -41,28 +41,6 @@ service = build('sheets', 'v4', credentials=creds)
 sheet = service.spreadsheets()
 
 
-def get_score_channel():
-    with open('score_channel.txt', 'r') as f:
-        channel_id = int(f.read())
-
-    SCORE_POST_CHANNEL = bot.get_channel(channel_id)
-    return SCORE_POST_CHANNEL
-
-
-SCORE_POST_CHANNEL = get_score_channel()
-
-
-@bot.command(name="set_score_channel")
-@commands.has_permissions(administrator=True)
-async def set_score_channel(ctx, channel_id: int):
-    global SCORE_POST_CHANNEL
-
-    with open('score_channel.txt', 'w') as f:
-        f.write(channel_id)
-
-    SCORE_POST_CHANNEL = bot.get_channel(channel_id)
-
-
 async def post_results():
     await bot.wait_until_ready()
     print("Starting post results")
@@ -197,7 +175,8 @@ async def add_to_db_if_not_exists(cursor, score, username):
     if db_score is None:
         cursor.execute("INSERT INTO scores VALUES (?,?,?,?,?)", [user_id, username, bmap_id, player_score, date])
         score_embed = await make_score_embed(*[user_id, username, bmap_id, player_score, date])
-        await SCORE_POST_CHANNEL.send(score_embed)
+        score_channel = bot.get_channel(749956966373261362)
+        await score_channel.send(score_embed)
 
     return
 
