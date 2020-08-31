@@ -209,10 +209,11 @@ async def make_score_embed(user_id, username, bmap_id, player_score, date):
               }
     async with aiohttp.ClientSession() as s:
         async with s.get(api_url, params=params) as r:
-            response = await r.json()[0]
+            bmap_info = await r.json()
 
-    beatmapset_id = response['beatmapset_id']
-    bmap_title = response['title']
+    bmap_info = bmap_info[0]
+    beatmapset_id = bmap_info['beatmapset_id']
+    bmap_title = bmap_info['title']
     cover_url = f"https://assets.ppy.sh/beatmaps/{beatmapset_id}/covers/cover.jpg"
     desc_text = f'{username} got {player_score} on {bmap_title}!'
     embed = discord.Embed(description=desc_text)
