@@ -175,7 +175,7 @@ async def add_to_db_if_not_exists(cursor, score, username):
     if db_score is None:
         cursor.execute("INSERT INTO scores VALUES (?,?,?,?,?)", [user_id, username, bmap_id, player_score, date])
         score_embed = await make_score_embed(*[user_id, username, bmap_id, player_score, date])
-        score_channel = bot.get_channel(676411865592758272)  # 749956966373261362
+        score_channel = bot.get_channel(749956966373261362)  # 749956966373261362, test: 676411865592758272
         await score_channel.send(embed=score_embed)
 
     return
