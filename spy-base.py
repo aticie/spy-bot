@@ -1,5 +1,7 @@
 import os
 import time
+import json
+import itertools
 import sqlite3
 import pickle
 import asyncio
@@ -16,7 +18,13 @@ import discord
 bot = commands.Bot(command_prefix="?", case_insensitive=True, description="Just an ordinary bot, nothing to see here")
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-SPREADSHEET_ID = os.environ["SPREADSHEET_ID"]
+
+with open('secrets.json', 'r') as f:
+    secrets = json.load(f)
+
+SPREADSHEET_ID = secrets['spreadsheet_id']
+DISCORD_TOKEN = secrets['discord_token']
+OSU_API_KEYS = secrets['api_keys']
 
 creds = None
 # The file token.pickle stores the user's access and refresh tokens, and is
@@ -121,7 +129,6 @@ def post_to_sheet(sheet_name, values, dump_or_not):
     return
 
 
-@tasks.loop(minutes=5)
 async def spy_user():
     await bot.wait_until_ready()
 
@@ -134,21 +141,25 @@ async def spy_user():
     with open("beatmaps.txt", "r") as f:
         beatmaps = f.read().splitlines()
 
-    for username in players:
-        scores = await request_scores(username)
+    user_cycle = itertools.cycle(players)
+    keys_cycle = itertools.cycle(OSU_API_KEYS)
+    while True:
+        username = next(user_cycle)
+        selected_api_key = next(keys_cycle)
+        scores = await request_scores(username, selected_api_key)
         sleep_for = SystemRandom().random() * 3 + 2  # Sleep between 2-5 seconds
         await asyncio.sleep(sleep_for)
 
         now = time.strftime("%H:%M:%S")
         print(f"{now} - Checking scores for {username}, played {len(scores)} scores recently.")
-        await add_scores_to_db(scores, beatmaps, username, c)
+        await add_scores_to_db(scores, beatmaps, username, c, selected_api_key)
 
         conn.commit()
 
-    await post_results()
+        await post_results()
 
 
-async def add_scores_to_db(scores, beatmaps, username, cursor):
+async def add_scores_to_db(scores, beatmaps, username, cursor, api_key):
     for score in scores:
         mods = int(score["enabled_mods"])
         sv2_enabled = mods & 536870912 == 536870912
@@ -163,10 +174,10 @@ async def add_scores_to_db(scores, beatmaps, username, cursor):
         if score["beatmap_id"] in beatmaps and not score["rank"] == "F" and sv2_enabled:
             now = time.strftime("%H:%M:%S")
             print(f"{now} - Adding score of {username} to DB. - Beatmap {score['beatmap_id']}")
-            await add_to_db_if_not_exists(cursor, score, username)
+            await add_to_db_if_not_exists(cursor, score, username, api_key)
 
 
-async def add_to_db_if_not_exists(cursor, score, username):
+async def add_to_db_if_not_exists(cursor, score, username, api_key):
     bmap_id = int(score["beatmap_id"])
     date = score["date"]
     player_score = int(score["score"])
@@ -175,16 +186,16 @@ async def add_to_db_if_not_exists(cursor, score, username):
                               [user_id, bmap_id, player_score, date]).fetchone()
     if db_score is None:
         cursor.execute("INSERT INTO scores VALUES (?,?,?,?,?)", [user_id, username, bmap_id, player_score, date])
-        score_embed = await make_score_embed(*[user_id, username, bmap_id, player_score, date])
+        score_embed = await make_score_embed(*[user_id, username, bmap_id, player_score, date, api_key])
         score_channel = bot.get_channel(749956966373261362)  # 749956966373261362, test: 676411865592758272
         await score_channel.send(embed=score_embed)
 
     return
 
 
-async def make_score_embed(user_id, username, bmap_id, player_score, date):
+async def make_score_embed(user_id, username, bmap_id, player_score, date, api_key):
     api_url = f"https://osu.ppy.sh/api/get_beatmaps"
-    params = {"k": os.environ["OSU_API_KEY"],
+    params = {"k": api_key,
               "b": bmap_id
               }
     async with aiohttp.ClientSession() as s:
@@ -204,10 +215,10 @@ async def make_score_embed(user_id, username, bmap_id, player_score, date):
     return embed
 
 
-async def request_scores(username):
+async def request_scores(username, api_key):
     api_url = f"https://osu.ppy.sh/api/get_user_recent"
     params = {"u": username,
-              "k": os.environ["OSU_API_KEY"],
+              "k": api_key,
               "limit": 100,
               "m": 0
               }
@@ -220,7 +231,7 @@ async def request_scores(username):
 
 @bot.event
 async def on_ready():
-    spy_user.start()
+    await spy_user()
 
 
-bot.run(os.environ["DISCORD_TOKEN"], bot=True, reconnect=True)
+bot.run(DISCORD_TOKEN, bot=True, reconnect=True)
